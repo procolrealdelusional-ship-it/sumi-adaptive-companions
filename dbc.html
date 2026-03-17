@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>SUMI — DBC Floor v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --skin-font:'DM Sans',system-ui,sans-serif;
+  --skin-bg:#0a0a0f;
+  --skin-orb:#2ECC71;
+  --skin-pulse:#00FF88;
+  --skin-text:#e0e0e0;
+  --skin-accent:#4ecdc4;
+  --skin-card:rgba(255,255,255,0.04);
+  --skin-border:rgba(255,255,255,0.08);
+  --skin-glow:rgba(46,204,113,0.3);
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--skin-font);background:var(--skin-bg);color:var(--skin-text);
+  min-height:100vh;min-height:100dvh;overflow-x:hidden;touch-action:pan-x pan-y;
+  transition:background .5s,color .5s,font-family .3s;-webkit-font-smoothing:antialiased}
+
+/* ─── TOP BAR ─── */
+.top-bar{position:fixed;top:0;left:0;right:0;z-index:50;
+  padding:max(env(safe-area-inset-top),12px) 16px 10px;
+  display:flex;justify-content:space-between;align-items:center;
+  background:linear-gradient(to bottom,var(--skin-bg),transparent);
+  pointer-events:none}
+.top-bar>*{pointer-events:auto}
+.brand{font-weight:700;font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--skin-accent);opacity:.7}
+.skin-row{display:flex;gap:6px}
+.skin-btn{background:var(--skin-card);border:1px solid var(--skin-border);
+  color:var(--skin-text);padding:5px 12px;border-radius:20px;font-size:.68rem;
+  font-family:var(--skin-font);cursor:pointer;transition:all .3s;
+  -webkit-tap-highlight-color:transparent}
+.skin-btn:hover,.skin-btn.active{border-color:var(--skin-accent);color:var(--skin-accent);
+  box-shadow:0 0 12px var(--skin-glow)}
+
+/* ─── HUD ─── */
+#hud{position:fixed;top:52px;left:0;right:0;padding:0 16px;
+  display:flex;justify-content:space-between;z-index:40;
+  pointer-events:none;font-family:monospace;font-size:.62rem;opacity:.55}
+.hud-pill{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);
+  border-radius:10px;padding:3px 8px;transition:color .3s,border-color .3s}
+.hud-pill.deep_flow{color:#00ff88;border-color:rgba(0,255,136,0.3)}
+.hud-pill.flow{color:#4ecdc4;border-color:rgba(78,205,196,0.3)}
+.hud-pill.neutral{color:#888}
+.hud-pill.breaking{color:#ff6b6b;border-color:rgba(255,107,107,0.3)}
+.hud-pill.lost{color:#f00;border-color:rgba(255,0,0,0.3)}
+
+/* ─── HORIZONTAL FLOOR SCROLL ─── */
+.floor-container{position:relative;width:100%;padding-top:76px}
+.floor{display:flex;gap:0;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;height:calc(100vh - 76px);height:calc(100dvh - 76px)}
+.floor::-webkit-scrollbar{display:none}
+.floor-panel{flex:0 0 100vw;scroll-snap-align:start;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px;overflow:hidden}
+
+/* ─── ORB PANEL ─── */
+.orb-canvas{width:100%;height:100%;position:absolute;top:0;left:0}
+
+/* ─── QI MAZE PANEL ─── */
+.maze-panel{background:linear-gradient(135deg,#0a0a12,#0f0f1a)}
+.maze-lock-msg{color:var(--skin-accent);font-size:.85rem;opacity:.6;text-align:center;
+  line-height:1.6;font-family:var(--skin-font)}
+.maze-lock-msg strong{display:block;font-size:1.1rem;margin-bottom:8px;opacity:1}
+.maze-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;
+  width:min(280px,70vw);aspect-ratio:1}
+.maze-cell{background:var(--skin-card);border:1px solid var(--skin-border);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;cursor:pointer;transition:all .25s;
+  -webkit-tap-highlight-color:transparent}
+.maze-cell.path{background:var(--skin-accent);border-color:var(--skin-accent);
+  box-shadow:0 0 12px var(--skin-glow)}
+.maze-cell.wall{background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.04);
+  cursor:default}
+.maze-cell.goal{background:rgba(255,215,0,0.15);border-color:rgba(255,215,0,0.4)}
+.maze-cell.player{background:var(--skin-orb);border-color:var(--skin-pulse);
+  box-shadow:0 0 16px var(--skin-glow);font-size:1.3rem}
+
+/* ─── STATS PANEL ─── */
+.stats-panel{background:linear-gradient(135deg,#0a0f0a,#0a0a12)}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(360px,85vw)}
+.stat-card{background:var(--skin-card);border:1px solid var(--skin-border);
+  border-radius:14px;padding:20px 16px;text-align:center}
+.stat-val{font-size:1.6rem;font-weight:700;color:var(--skin-accent);
+  font-variant-numeric:tabular-nums}
+.stat-label{font-size:.65rem;color:rgba(255,255,255,0.4);margin-top:4px;
+  text-transform:uppercase;letter-spacing:.08em}
+
+/* ─── FLOOR NAV DOTS ─── */
+.floor-nav{position:fixed;bottom:max(env(safe-area-inset-bottom),16px);left:50%;
+  transform:translateX(-50%);display:flex;gap:8px;z-index:40}
+.nav-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.15);
+  cursor:pointer;transition:all .3s;-webkit-tap-highlight-color:transparent}
+.nav-dot.active{background:var(--skin-accent);box-shadow:0 0 8px var(--skin-glow);
+  transform:scale(1.3)}
+
+/* ─── CLOUD BAR ─── */
+#cloud-bar{position:fixed;bottom:calc(max(env(safe-area-inset-bottom),16px) + 20px);
+  left:16px;right:16px;height:3px;background:rgba(255,255,255,0.04);
+  border-radius:2px;overflow:hidden;z-index:40}
+#cloud-fill{height:100%;width:0%;border-radius:2px;transition:width .6s,background .6s}
+
+/* ─── SESSION END OVERLAY ─── */
+#session-end{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:60;
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:1rem}
+#session-end.show{display:flex}
+#session-end h2{color:var(--skin-accent);font-weight:300;font-size:1.4rem;letter-spacing:.15em;
+  font-family:var(--skin-font)}
+#session-end p{color:rgba(255,255,255,0.4);font-size:.8rem}
+
+/* ─── GATE OVERLAY ─── */
+#gate{position:fixed;inset:0;background:var(--skin-bg);z-index:100;display:flex;
+  align-items:center;justify-content:center;flex-direction:column;gap:1.5rem;
+  transition:opacity .8s}
+#gate.done{opacity:0;pointer-events:none}
+#gate-circle{width:140px;height:140px;border-radius:50%;border:2px solid #333;
+  display:flex;align-items:center;justify-content:center;font-size:2.5rem;
+  cursor:pointer;transition:all .3s;-webkit-tap-highlight-color:transparent}
+#gate-circle.hit{border-color:var(--skin-accent);box-shadow:0 0 30px var(--skin-glow)}
+#gate-label{color:var(--skin-accent);font-size:.85rem;opacity:.6;font-family:var(--skin-font)}
+#gate-skip{background:none;border:1px solid rgba(255,255,255,0.08);
+  color:rgba(255,255,255,0.25);padding:6px 16px;border-radius:16px;
+  cursor:pointer;font-size:.65rem;margin-top:.5rem;font-family:var(--skin-font)}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR: Brand + Skin Buttons -->
+<div class="top-bar">
+  <div class="brand">SUMI DBC</div>
+  <div class="skin-row">
+    <button class="skin-btn active" onclick="switchSkin('jungle')">Jungle</button>
+    <button class="skin-btn" onclick="switchSkin('neon')">Neon</button>
+    <button class="skin-btn" onclick="switchSkin('sensei')">Sensei</button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div style="display:flex;gap:6px">
+    <span class="hud-pill" id="h-timer">25:00</span>
+    <span class="hud-pill" id="h-arc">Grounding</span>
+  </div>
+  <div style="display:flex;gap:6px">
+    <span class="hud-pill" id="h-cloud">neutral</span>
+    <span class="hud-pill" id="h-yy">balanced</span>
+    <span class="hud-pill" id="h-fib">F1</span>
+  </div>
+</div>
+
+<!-- HORIZONTAL FLOOR -->
+<div class="floor-container">
+  <div class="floor" id="floor">
+
+    <!-- Panel 1: Orb Focus -->
+    <div class="floor-panel" id="panel-orb">
+      <canvas class="orb-canvas" id="c"></canvas>
+      <div id="avatar-reveal" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+        pointer-events:none;z-index:10;opacity:0;transition:opacity .8s cubic-bezier(.618,0,.382,1);
+        width:120px;height:120px;border-radius:50%;border:2px solid rgba(255,215,0,0.6);
+        background:radial-gradient(circle,rgba(255,215,0,0.15),transparent)">
+        <div id="avatar-inner" style="width:100%;height:100%;border-radius:50%;display:flex;
+          align-items:center;justify-content:center;font-size:48px;filter:blur(8px);
+          transition:filter 1.2s,opacity 1.2s"></div>
+      </div>
+    </div>
+
+    <!-- Panel 2: Qi Maze -->
+    <div class="floor-panel maze-panel" id="panel-maze">
+      <div id="maze-lock" class="maze-lock-msg">
+        <strong>🔒 Qi Maze Locked</strong>
+        Reach streak ≥ 5 or trigger over_stim to unlock
+      </div>
+      <div id="maze-game" style="display:none">
+        <div style="text-align:center;margin-bottom:16px">
+          <span style="font-size:.75rem;color:var(--skin-accent);letter-spacing:.1em;text-transform:uppercase">Qi Maze</span>
+          <div id="maze-moves" style="font-size:.62rem;color:rgba(255,255,255,0.3);margin-top:4px">Moves: 0</div>
+        </div>
+        <div class="maze-grid" id="maze-grid"></div>
+        <button id="maze-reset" style="margin-top:16px;background:var(--skin-card);border:1px solid var(--skin-border);
+          color:var(--skin-text);padding:8px 20px;border-radius:20px;font-size:.7rem;cursor:pointer;
+          font-family:var(--skin-font)" onclick="resetMaze()">New Maze</button>
+      </div>
+    </div>
+
+    <!-- Panel 3: Stats -->
+    <div class="floor-panel stats-panel" id="panel-stats">
+      <div style="text-align:center;margin-bottom:20px">
+        <span style="font-size:.75rem;color:var(--skin-accent);letter-spacing:.1em;text-transform:uppercase">Session Stats</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="s-streak">0</div>
+          <div class="stat-label">Streak</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-xp">0</div>
+          <div class="stat-label">XP</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-fib">F1</div>
+          <div class="stat-label">Fibonacci</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-flow">—</div>
+          <div class="stat-label">Flow State</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-yin">50%</div>
+          <div class="stat-label">Yin</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-yang">50%</div>
+          <div class="stat-label">Yang</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Floor nav dots -->
+<div class="floor-nav">
+  <div class="nav-dot active" data-panel="0" onclick="scrollToPanel(0)"></div>
+  <div class="nav-dot" data-panel="1" onclick="scrollToPanel(1)"></div>
+  <div class="nav-dot" data-panel="2" onclick="scrollToPanel(2)"></div>
+</div>
+
+<div id="cloud-bar"><div id="cloud-fill"></div></div>
+
+<div id="session-end">
+  <h2>Dojo Closed</h2>
+  <p>25 min session complete. Breathe.</p>
+  <p style="font-size:.65rem;opacity:.25">Reload for new session</p>
+</div>
+
+<div id="gate">
+  <div id="gate-label">Tap the rhythm</div>
+  <div id="gate-circle">&#x1FA98;</div>
+  <div id="gate-score" style="color:var(--skin-accent);font-size:.6rem;opacity:.3"></div>
+  <button id="gate-skip">skip →</button>
+</div>
+
+<script>
+/* ═══════════════════════════════════
+   SKIN DEFINITIONS + switchSkin()
+   ═══════════════════════════════════ */
+const SKIN_DEFS = {
+  jungle: {
+    id: 'jungle', label: 'Jungle',
+    font: "'Nunito', sans-serif",
+    bg: '#0a1a0f',
+    orb: '#2ECC71', pulse: '#00FF88',
+    text: '#d0e8d0', accent: '#4ecdc4',
+    card: 'rgba(46,204,113,0.06)', border: 'rgba(46,204,113,0.12)',
+    glow: 'rgba(46,204,113,0.3)',
+    bg_gradient: ['#0a1a0f','#0d260f'], particle_hue: 140,
+    glow_intensity: 1.2, avatar_emoji: '\u{1F981}'
+  },
+  neon: {
+    id: 'neon', label: 'Neon',
+    font: "'DM Sans', sans-serif",
+    bg: '#1a0a14',
+    orb: '#FF006E', pulse: '#FF4DA6',
+    text: '#f0d0e0', accent: '#FF4DA6',
+    card: 'rgba(255,0,110,0.06)', border: 'rgba(255,0,110,0.12)',
+    glow: 'rgba(255,0,110,0.3)',
+    bg_gradient: ['#1a0a14','#260d1a'], particle_hue: 330,
+    glow_intensity: 1.4, avatar_emoji: '\u{1F3CE}'
+  },
+  sensei: {
+    id: 'sensei', label: 'Sensei',
+    font: "'Noto Serif JP', serif",
+    bg: '#0f0a1a',
+    orb: '#7B2FBE', pulse: '#A855F7',
+    text: '#e0d8f0', accent: '#A855F7',
+    card: 'rgba(123,47,190,0.06)', border: 'rgba(123,47,190,0.12)',
+    glow: 'rgba(123,47,190,0.3)',
+    bg_gradient: ['#0f0a1a','#150d26'], particle_hue: 270,
+    glow_intensity: 1.1, avatar_emoji: '\u{1F9D8}'
+  }
+};
+
+let activeSkinKey = 'jungle';
+
+function switchSkin(skinKey) {
+  const s = SKIN_DEFS[skinKey];
+  if (!s) return;
+  activeSkinKey = skinKey;
+  const root = document.documentElement.style;
+  root.setProperty('--skin-font', s.font);
+  root.setProperty('--skin-bg', s.bg);
+  root.setProperty('--skin-orb', s.orb);
+  root.setProperty('--skin-pulse', s.pulse);
+  root.setProperty('--skin-text', s.text);
+  root.setProperty('--skin-accent', s.accent);
+  root.setProperty('--skin-card', s.card);
+  root.setProperty('--skin-border', s.border);
+  root.setProperty('--skin-glow', s.glow);
+  // Update button states
+  document.querySelectorAll('.skin-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().toLowerCase() === skinKey);
+  });
+  // Haptic feedback
+  if (navigator.vibrate) navigator.vibrate(15);
+}
+
+/* ═══════════════════════════════════
+   ENGINE 1: IchimokuCloud
+   ═══════════════════════════════════ */
+class IchimokuCloud {
+  constructor() { this.h = []; this.c = []; this.mx = 52 }
+  push(v) { this.h.push(Math.max(0, Math.min(100, v))); if (this.h.length > this.mx) this.h.shift(); this._calc() }
+  _m(p) { const s = this.h.slice(-p); return s.length ? ((Math.max(...s) + Math.min(...s)) / 2) : 50 }
+  _calc() { const tk = this._m(9), kj = this._m(26), sA = (tk + kj) / 2, sB = this._m(52);
+    const ch = this.h.length > 26 ? this.h[this.h.length - 26] : this.h[0] || 50;
+    this.c.push({ tk, kj, sA, sB, ch }); if (this.c.length > 100) this.c.shift() }
+  getState() { if (!this.c.length) return 'neutral'; const l = this.c[this.c.length - 1];
+    const th = Math.abs(l.sA - l.sB), ab = l.tk > Math.max(l.sA, l.sB), bl = l.tk < Math.min(l.sA, l.sB);
+    if (ab && th > 15) return 'deep_flow'; if (ab) return 'flow'; if (bl && th > 15) return 'lost'; if (bl) return 'breaking'; return 'neutral' }
+  getColor() { return { deep_flow: '#00ff88', flow: '#4ecdc4', neutral: '#666', breaking: '#ff6b6b', lost: '#f00' }[this.getState()] }
+  getThickness() { if (!this.c.length) return 0; const l = this.c[this.c.length - 1]; return Math.abs(l.sA - l.sB) }
+}
+
+/* ═══════════════════════════════════
+   ENGINE 2: YinYangEngine
+   ═══════════════════════════════════ */
+class YinYangEngine {
+  constructor() { this.yi = 0; this.ya = 0; this.dk = 0.95 }
+  pushYang() { this.ya += 10; this.yi *= this.dk }
+  pushYin() { this.yi += 10; this.ya *= this.dk }
+  reportAction(ms, freq) { if (ms < 300 || freq > 3) this.pushYang(); else if (ms > 1500 || freq < 0.5) this.pushYin() }
+  getState() { const t = Math.max(1, this.yi + this.ya), bal = (this.ya - this.yi) / t;
+    let e = 'balanced'; if (bal > 0.3) e = 'yang'; else if (bal < -0.3) e = 'yin';
+    return { energy: e, balance: bal, tempo: e === 'yang' ? 0.7 : e === 'yin' ? 1.4 : 1.0, brightness: e === 'yang' ? 0.2 : e === 'yin' ? 0.9 : 0.5 } }
+  getYinPercent() { const t = Math.max(1, this.yi + this.ya); return Math.round((this.yi / t) * 100) }
+  getYangPercent() { const t = Math.max(1, this.yi + this.ya); return Math.round((this.ya / t) * 100) }
+}
+
+/* ═══════════════════════════════════
+   ENGINE 3: KidsGuard
+   ═══════════════════════════════════ */
+class KidsGuard {
+  constructor(max = 25, nudge = 15) { this.max = max; this.nudge = nudge; this.s = 0; this.nd = false; this.t = null; this.bCb = null; this.nCb = null }
+  begin() { this.s = Date.now(); this.nd = false; this.t = setInterval(() => this._tk(), 5000) }
+  _tk() { const m = (Date.now() - this.s) / 60000;
+    if (m >= this.max) { this.pause(); if (this.bCb) this.bCb() }
+    else if (m >= this.nudge && !this.nd) { this.nd = true; if (this.nCb) this.nCb() } }
+  pause() { if (this.t) clearInterval(this.t) }
+  remaining() { return Math.max(0, this.max - (Date.now() - this.s) / 60000) }
+  onBreak(cb) { this.bCb = cb }
+  onNudge(cb) { this.nCb = cb }
+}
+
+/* ═══════════════════════════════════
+   ENGINE 4: QawwaliArc
+   ═══════════════════════════════════ */
+class QawwaliArc {
+  constructor(min = 25) { const t = min * 60; this.td = t; this.st = 0;
+    this.ph = [{ n: 'drone', d: t * .12, si: .1, ei: .2 }, { n: 'rhythm', d: t * .16, si: .2, ei: .4 },
+    { n: 'build', d: t * .24, si: .4, ei: .75 }, { n: 'peak', d: t * .20, si: .75, ei: 1 },
+    { n: 'release', d: t * .16, si: 1, ei: .3 }, { n: 'silence', d: t * .12, si: .3, ei: 0 }] }
+  start() { this.st = Date.now() }
+  getState() { const e = (Date.now() - this.st) / 1000; let cum = 0;
+    for (const p of this.ph) { if (e < cum + p.d) { const pr = (e - cum) / p.d;
+    return { phase: p.n, intensity: p.si + (p.ei - p.si) * pr, progress: pr, bpm: 60 + p.si * 80 } } cum += p.d }
+    return { phase: 'silence', intensity: 0, progress: 1, bpm: 60 } }
+  getLabel() { return { drone: 'Grounding', rhythm: 'Awakening', build: 'Rising', peak: 'Flow State',
+    release: 'Integration', silence: 'Stillness' }[this.getState().phase] || '' }
+}
+
+/* ═══════════════════════════════════
+   ENGINE 5: AudioGate
+   ═══════════════════════════════════ */
+class AudioGate {
+  constructor() { this.taps = []; this.target = 8; this.beat = 60000 / 80; this.score = 0; this.done = false;
+    this.pattern = Array.from({ length: 8 }, (_, i) => this.beat * (i + 1) + (Math.random() * 50 - 25)) }
+  start() { this.startTime = Date.now(); this.taps = []; this.score = 0; this.done = false }
+  tap() { if (this.done) return; const t = Date.now() - this.startTime; this.taps.push(t);
+    if (this.taps.length >= this.target) { let h = 0;
+    for (let i = 0; i < 8; i++) if (this.taps[i] && Math.abs(this.taps[i] - this.pattern[i]) < 250) h++;
+    this.score = Math.round((h / 8) * 100); this.done = true } }
+  isDone() { return this.done }
+  passed() { return this.score >= 30 }
+}
+
+/* ═══════════════════════════════════
+   QI MAZE ENGINE
+   ═══════════════════════════════════ */
+const MAZE_SIZE = 5;
+let mazeGrid = [], playerPos = { r: 0, c: 0 }, goalPos = { r: 4, c: 4 }, mazeMoves = 0, mazeUnlocked = false;
+
+function generateMaze() {
+  mazeGrid = Array.from({ length: MAZE_SIZE }, () => Array(MAZE_SIZE).fill(0));
+  // Carve a guaranteed path using random walk
+  let r = 0, c = 0;
+  const path = [[0, 0]];
+  while (r < MAZE_SIZE - 1 || c < MAZE_SIZE - 1) {
+    const dirs = [];
+    if (r < MAZE_SIZE - 1) dirs.push([1, 0]);
+    if (c < MAZE_SIZE - 1) dirs.push([0, 1]);
+    if (r > 0 && Math.random() < 0.2) dirs.push([-1, 0]);
+    if (c > 0 && Math.random() < 0.2) dirs.push([0, -1]);
+    const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+    r += dr; c += dc;
+    r = Math.max(0, Math.min(MAZE_SIZE - 1, r));
+    c = Math.max(0, Math.min(MAZE_SIZE - 1, c));
+    path.push([r, c]);
+    mazeGrid[r][c] = 0;
+  }
+  // Add some walls
+  for (let i = 0; i < MAZE_SIZE; i++)
+    for (let j = 0; j < MAZE_SIZE; j++)
+      if (Math.random() < 0.25 && !path.some(p => p[0] === i && p[1] === j))
+        mazeGrid[i][j] = 1;
+  mazeGrid[0][0] = 0;
+  mazeGrid[MAZE_SIZE - 1][MAZE_SIZE - 1] = 0;
+  playerPos = { r: 0, c: 0 };
+  goalPos = { r: MAZE_SIZE - 1, c: MAZE_SIZE - 1 };
+  mazeMoves = 0;
+  renderMaze();
+}
+
+function renderMaze() {
+  const grid = document.getElementById('maze-grid');
+  grid.innerHTML = '';
+  for (let r = 0; r < MAZE_SIZE; r++) {
+    for (let c = 0; c < MAZE_SIZE; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'maze-cell';
+      if (r === playerPos.r && c === playerPos.c) {
+        cell.classList.add('player');
+        cell.textContent = '☯';
+      } else if (r === goalPos.r && c === goalPos.c) {
+        cell.classList.add('goal');
+        cell.textContent = '✦';
+      } else if (mazeGrid[r][c] === 1) {
+        cell.classList.add('wall');
+      }
+      cell.addEventListener('click', () => moveMaze(r, c));
+      grid.appendChild(cell);
+    }
+  }
+  document.getElementById('maze-moves').textContent = 'Moves: ' + mazeMoves;
+}
+
+function moveMaze(r, c) {
+  const dr = Math.abs(r - playerPos.r), dc = Math.abs(c - playerPos.c);
+  if ((dr + dc) !== 1) return;
+  if (mazeGrid[r][c] === 1) return;
+  playerPos = { r, c };
+  mazeMoves++;
+  if (navigator.vibrate) navigator.vibrate(10);
+  renderMaze();
+  if (r === goalPos.r && c === goalPos.c) {
+    sessionState.xp += 100;
+    setTimeout(() => { alert('Qi Maze Complete! +100 XP'); generateMaze(); }, 200);
+  }
+}
+
+function resetMaze() { generateMaze() }
+
+function checkMazeUnlock() {
+  if (mazeUnlocked) return;
+  if (sessionState.streak >= 5 || sessionState.over_stim) {
+    mazeUnlocked = true;
+    document.getElementById('maze-lock').style.display = 'none';
+    document.getElementById('maze-game').style.display = 'block';
+    generateMaze();
+  }
+}
+
+// Touch swipe for maze
+let mazeTouch = null;
+document.getElementById('panel-maze').addEventListener('touchstart', e => {
+  if (!mazeUnlocked) return;
+  mazeTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+document.getElementById('panel-maze').addEventListener('touchend', e => {
+  if (!mazeUnlocked || !mazeTouch) return;
+  const dx = e.changedTouches[0].clientX - mazeTouch.x;
+  const dy = e.changedTouches[0].clientY - mazeTouch.y;
+  if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
+  let nr = playerPos.r, nc = playerPos.c;
+  if (Math.abs(dx) > Math.abs(dy)) nc += dx > 0 ? 1 : -1;
+  else nr += dy > 0 ? 1 : -1;
+  if (nr >= 0 && nr < MAZE_SIZE && nc >= 0 && nc < MAZE_SIZE) moveMaze(nr, nc);
+  mazeTouch = null;
+}, { passive: true });
+
+/* ═══════════════════════════════════
+   SESSION STATE
+   ═══════════════════════════════════ */
+const sessionState = {
+  streak: +(localStorage.getItem('sumi_dbc_streak') || 0),
+  xp: +(localStorage.getItem('sumi_dbc_xp') || 0),
+  over_stim: false
+};
+
+function saveState() {
+  localStorage.setItem('sumi_dbc_streak', sessionState.streak);
+  localStorage.setItem('sumi_dbc_xp', sessionState.xp);
+}
+
+/* ═══════════════════════════════════
+   MAIN ORB LOOP
+   ═══════════════════════════════════ */
+const C = document.getElementById('c'), X = C.getContext('2d'),
+  AR = document.getElementById('avatar-reveal'), AI = document.getElementById('avatar-inner'),
+  hTimer = document.getElementById('h-timer'), hArc = document.getElementById('h-arc'),
+  hCloud = document.getElementById('h-cloud'), hYY = document.getElementById('h-yy'),
+  hFib = document.getElementById('h-fib'), cFill = document.getElementById('cloud-fill'),
+  sessEnd = document.getElementById('session-end'),
+  gateEl = document.getElementById('gate'), gateCircle = document.getElementById('gate-circle'),
+  gateScore = document.getElementById('gate-score'), gateSkip = document.getElementById('gate-skip');
+
+let W, H, t = 0, drillCount = 0, drillProgress = 0, orbs = [], sessionActive = false,
+  lastPointerTime = 0, tapCount = 0, tapWindow = [];
+
+const ichimoku = new IchimokuCloud(), yinyang = new YinYangEngine(),
+  guard = new KidsGuard(), arc = new QawwaliArc(), gate = new AudioGate();
+
+const GLOW_MAP = { deep_flow: 1.6, flow: 1.3, neutral: 1.0, breaking: 0.7, lost: 0.4 };
+
+function resize() {
+  const panel = document.getElementById('panel-orb');
+  W = C.width = panel.clientWidth;
+  H = C.height = panel.clientHeight;
+}
+addEventListener('resize', resize);
+setTimeout(resize, 50);
+
+function getSkin() { return SKIN_DEFS[activeSkinKey] }
+
+function hexToRgb(h) { const r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16); return { r, g, b } }
+
+function drawOrb() {
+  const s = getSkin(); if (!s) return;
+  const cx = W / 2, cy = H / 2;
+  const baseR = Math.min(W, H) * 0.15;
+  const pulse = Math.sin(t * 0.02) * 0.1 + 1;
+  const r = baseR * pulse;
+  const yyState = yinyang.getState();
+  const breatheSpeed = 0.008 * yyState.tempo;
+  const breathe = Math.sin(t * breatheSpeed) * 0.3 + 0.7;
+  const cloudState = ichimoku.getState();
+  const dynGlow = GLOW_MAP[cloudState] || 1.0;
+  const g = X.createRadialGradient(cx, cy, 0, cx, cy, r * 2.5);
+  const rgb = hexToRgb(s.orb);
+  g.addColorStop(0, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (0.9 * breathe) + ')');
+  g.addColorStop(0.4, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (0.4 * breathe) + ')');
+  g.addColorStop(0.7, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (0.1 * breathe) + ')');
+  g.addColorStop(1, 'transparent');
+  X.fillStyle = g; X.beginPath(); X.arc(cx, cy, r * 2.5, 0, Math.PI * 2); X.fill();
+  X.shadowColor = s.pulse; X.shadowBlur = 60 * dynGlow * breathe;
+  X.fillStyle = s.orb; X.beginPath(); X.arc(cx, cy, r, 0, Math.PI * 2); X.fill(); X.shadowBlur = 0;
+  for (let i = 0; i < 3; i++) {
+    const rr = r * (1.3 + i * 0.4), a = 0.15 - i * 0.04;
+    X.strokeStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + a + ')';
+    X.lineWidth = 1.5; X.beginPath(); X.arc(cx, cy, rr + Math.sin(t * 0.015 + i) * 10, 0, Math.PI * 2); X.stroke();
+  }
+}
+
+function spawnParticles() {
+  if (Math.random() > 0.92) return;
+  const angle = Math.random() * Math.PI * 2, dist = Math.min(W, H) * 0.3 + Math.random() * 100;
+  orbs.push({ x: W / 2 + Math.cos(angle) * dist, y: H / 2 + Math.sin(angle) * dist,
+    vx: Math.cos(angle) * 0.3, vy: Math.sin(angle) * 0.3, life: 1, size: Math.random() * 3 + 1 });
+}
+
+function drawParticles() {
+  const s = getSkin(); if (!s) return;
+  orbs = orbs.filter(o => {
+    o.life -= 0.008; o.x += o.vx; o.y += o.vy; if (o.life <= 0) return false;
+    X.globalAlpha = o.life * 0.6; X.fillStyle = s.pulse;
+    X.beginPath(); X.arc(o.x, o.y, o.size * o.life, 0, Math.PI * 2); X.fill();
+    X.globalAlpha = 1; return true;
+  });
+}
+
+function drawBg() {
+  const s = getSkin(); if (!s) return;
+  const g = X.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, s.bg_gradient[0]); g.addColorStop(1, s.bg_gradient[1]);
+  X.fillStyle = g; X.fillRect(0, 0, W, H);
+}
+
+function handleDrillProgress() {
+  drillProgress += 0.001;
+  const focusScore = drillProgress * 100;
+  ichimoku.push(focusScore);
+  if (drillProgress >= 1) {
+    drillCount++; drillProgress = 0;
+    sessionState.streak++; sessionState.xp += 50; saveState();
+    checkMazeUnlock();
+    const s = getSkin();
+    if (drillCount >= 3) {
+      AR.style.opacity = '1'; AI.style.filter = 'blur(0px)';
+      AI.textContent = s.avatar_emoji; AI.style.opacity = '1';
+    } else if (drillCount >= 1) {
+      const fib_opacity = [0, 0.236, 0.382, 0.618, 1];
+      const op = fib_opacity[Math.min(drillCount, 4)];
+      AR.style.opacity = String(op);
+      AI.style.filter = 'blur(' + (8 * (1 - op)) + 'px)';
+      AI.textContent = s.avatar_emoji; AI.style.opacity = String(op * 0.618);
+    }
+  }
+  // Over-stimulation check
+  if (tapWindow.length > 8) { sessionState.over_stim = true; checkMazeUnlock() }
+}
+
+function handleTouch() {
+  drillProgress += 0.005;
+  const now = Date.now(), dt = now - lastPointerTime;
+  tapWindow.push(now); tapWindow = tapWindow.filter(t => now - t < 2000);
+  const freq = tapWindow.length / 2;
+  yinyang.reportAction(dt, freq); lastPointerTime = now;
+  if (navigator.vibrate) navigator.vibrate(8);
+}
+
+function updateHUD() {
+  if (!sessionActive) return;
+  const rem = guard.remaining();
+  const m = Math.floor(rem), s = Math.floor((rem - m) * 60);
+  hTimer.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  hArc.textContent = arc.getLabel();
+  const cs = ichimoku.getState(); hCloud.textContent = cs; hCloud.className = 'hud-pill ' + cs;
+  const yy = yinyang.getState(); hYY.textContent = yy.energy;
+  hFib.textContent = 'F' + (drillCount + 1);
+  cFill.style.width = Math.min(100, ichimoku.getThickness() * 2) + '%';
+  cFill.style.background = ichimoku.getColor();
+  // Update stats panel
+  document.getElementById('s-streak').textContent = sessionState.streak;
+  document.getElementById('s-xp').textContent = sessionState.xp;
+  document.getElementById('s-fib').textContent = 'F' + (drillCount + 1);
+  document.getElementById('s-flow').textContent = cs;
+  document.getElementById('s-yin').textContent = yinyang.getYinPercent() + '%';
+  document.getElementById('s-yang').textContent = yinyang.getYangPercent() + '%';
+}
+
+guard.onBreak(() => { sessionActive = false; sessEnd.classList.add('show') });
+guard.onNudge(() => { hTimer.style.color = '#ff6b6b' });
+
+C.addEventListener('pointerdown', () => {
+  if (!sessionActive) { sessionActive = true; guard.begin(); arc.start() }
+  C.addEventListener('pointermove', handleTouch); handleTouch();
+});
+C.addEventListener('pointerup', () => { C.removeEventListener('pointermove', handleTouch) });
+
+// AudioGate setup
+gate.start();
+gateCircle.addEventListener('click', () => {
+  gate.tap(); gateCircle.classList.add('hit');
+  if (navigator.vibrate) navigator.vibrate(12);
+  setTimeout(() => gateCircle.classList.remove('hit'), 200);
+  gateScore.textContent = gate.taps.length + '/8';
+  if (gate.isDone()) {
+    gateScore.textContent = 'Score: ' + gate.score + '%';
+    setTimeout(() => { gateEl.classList.add('done') }, 800);
+  }
+});
+gateSkip.addEventListener('click', () => { gateEl.classList.add('done') });
+
+/* ═══════════════════════════════════
+   FLOOR SCROLL + NAV DOTS
+   ═══════════════════════════════════ */
+const floor = document.getElementById('floor');
+const navDots = document.querySelectorAll('.nav-dot');
+
+function scrollToPanel(idx) {
+  floor.scrollTo({ left: idx * window.innerWidth, behavior: 'smooth' });
+}
+
+floor.addEventListener('scroll', () => {
+  const idx = Math.round(floor.scrollLeft / window.innerWidth);
+  navDots.forEach((d, i) => d.classList.toggle('active', i === idx));
+}, { passive: true });
+
+// Keyboard arrow keys for floor scroll
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') { const idx = Math.min(2, Math.round(floor.scrollLeft / window.innerWidth) + 1); scrollToPanel(idx) }
+  if (e.key === 'ArrowLeft') { const idx = Math.max(0, Math.round(floor.scrollLeft / window.innerWidth) - 1); scrollToPanel(idx) }
+});
+
+// Keyboard WASD for maze
+document.addEventListener('keydown', e => {
+  if (!mazeUnlocked) return;
+  const currentPanel = Math.round(floor.scrollLeft / window.innerWidth);
+  if (currentPanel !== 1) return;
+  let nr = playerPos.r, nc = playerPos.c;
+  if (e.key === 'w' || e.key === 'ArrowUp') nr--;
+  else if (e.key === 's' || e.key === 'ArrowDown') nr++;
+  else if (e.key === 'a') nc--;
+  else if (e.key === 'd') nc++;
+  else return;
+  if (nr >= 0 && nr < MAZE_SIZE && nc >= 0 && nc < MAZE_SIZE) moveMaze(nr, nc);
+});
+
+/* ═══════════════════════════════════
+   FRAME LOOP
+   ═══════════════════════════════════ */
+function frame() {
+  t++; X.clearRect(0, 0, W, H);
+  drawBg(); spawnParticles(); drawParticles(); drawOrb();
+  if (sessionActive) { handleDrillProgress(); if (t % 30 === 0) updateHUD() }
+  requestAnimationFrame(frame);
+}
+
+// Init
+switchSkin('jungle');
+AI.textContent = getSkin().avatar_emoji;
+resize();
+frame();
+</script>
+</body>
+</html>
