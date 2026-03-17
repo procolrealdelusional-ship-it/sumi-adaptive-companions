@@ -19,11 +19,19 @@
   --skin-card:rgba(255,255,255,0.04);
   --skin-border:rgba(255,255,255,0.08);
   --skin-glow:rgba(46,204,113,0.3);
+  --orb-glow:0.5;
+  --breathe-speed:3s;
 }
 html{scroll-behavior:smooth}
 body{font-family:var(--skin-font);background:var(--skin-bg);color:var(--skin-text);
   min-height:100vh;min-height:100dvh;overflow-x:hidden;touch-action:pan-x pan-y;
   transition:background .5s,color .5s,font-family .3s;-webkit-font-smoothing:antialiased}
+body.mood-drone{background:linear-gradient(180deg,#080b10 0%,var(--skin-bg) 100%)}
+body.mood-rhythm{background:linear-gradient(180deg,#0a1018 0%,var(--skin-bg) 100%)}
+body.mood-build{background:linear-gradient(180deg,#101a1d 0%,var(--skin-bg) 100%)}
+body.mood-peak{background:linear-gradient(180deg,#182010 0%,var(--skin-bg) 100%)}
+body.mood-release{background:linear-gradient(180deg,#11131a 0%,var(--skin-bg) 100%)}
+body.mood-silence{background:var(--skin-bg)}
 
 /* ─── TOP BAR ─── */
 .top-bar{position:fixed;top:0;left:0;right:0;z-index:50;
@@ -64,7 +72,14 @@ body{font-family:var(--skin-font);background:var(--skin-bg);color:var(--skin-tex
   padding:24px;overflow:hidden}
 
 /* ─── ORB PANEL ─── */
-.orb-canvas{width:100%;height:100%;position:absolute;top:0;left:0}
+.orb-canvas{width:100%;height:100%;position:absolute;top:0;left:0;
+  filter:drop-shadow(0 0 40px rgba(46,204,113,var(--orb-glow)));
+  animation:orb-breathe var(--breathe-speed) ease-in-out infinite;
+  transition:filter .4s ease}
+@keyframes orb-breathe{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.02)}
+}
 
 /* ─── QI MAZE PANEL ─── */
 .maze-panel{background:linear-gradient(135deg,#0a0a12,#0f0f1a)}
@@ -111,8 +126,9 @@ body{font-family:var(--skin-font);background:var(--skin-bg);color:var(--skin-tex
 
 /* ─── SESSION END OVERLAY ─── */
 #session-end{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:60;
-  display:none;align-items:center;justify-content:center;flex-direction:column;gap:1rem}
-#session-end.show{display:flex}
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;
+  opacity:0;pointer-events:none;transition:opacity .8s ease}
+#session-end.show{opacity:1;pointer-events:auto}
 #session-end h2{color:var(--skin-accent);font-weight:300;font-size:1.4rem;letter-spacing:.15em;
   font-family:var(--skin-font)}
 #session-end p{color:rgba(255,255,255,0.4);font-size:.8rem}
@@ -323,10 +339,13 @@ class IchimokuCloud {
   _calc() { const tk = this._m(9), kj = this._m(26), sA = (tk + kj) / 2, sB = this._m(52);
     const ch = this.h.length > 26 ? this.h[this.h.length - 26] : this.h[0] || 50;
     this.c.push({ tk, kj, sA, sB, ch }); if (this.c.length > 100) this.c.shift() }
-  getState() { if (!this.c.length) return 'neutral'; const l = this.c[this.c.length - 1];
+  getState() { if (!this.c.length) return { state: 'neutral', intensity: 0 }; const l = this.c[this.c.length - 1];
     const th = Math.abs(l.sA - l.sB), ab = l.tk > Math.max(l.sA, l.sB), bl = l.tk < Math.min(l.sA, l.sB);
-    if (ab && th > 15) return 'deep_flow'; if (ab) return 'flow'; if (bl && th > 15) return 'lost'; if (bl) return 'breaking'; return 'neutral' }
-  getColor() { return { deep_flow: '#00ff88', flow: '#4ecdc4', neutral: '#666', breaking: '#ff6b6b', lost: '#f00' }[this.getState()] }
+    let state = 'neutral';
+    if (ab && th > 15) state = 'deep_flow'; else if (ab) state = 'flow'; else if (bl && th > 15) state = 'lost'; else if (bl) state = 'breaking';
+    const intensity = Math.max(0, Math.min(1, th / 20));
+    return { state, intensity } }
+  getColor() { return { deep_flow: '#00ff88', flow: '#4ecdc4', neutral: '#666', breaking: '#ff6b6b', lost: '#f00' }[this.getState().state] }
   getThickness() { if (!this.c.length) return 0; const l = this.c[this.c.length - 1]; return Math.abs(l.sA - l.sB) }
 }
 
@@ -527,6 +546,9 @@ let W, H, t = 0, drillCount = 0, drillProgress = 0, orbs = [], sessionActive = f
 
 const ichimoku = new IchimokuCloud(), yinyang = new YinYangEngine(),
   guard = new KidsGuard(), arc = new QawwaliArc(), gate = new AudioGate();
+const ORB_MOODS = ['drone', 'rhythm', 'build', 'peak', 'release', 'silence'];
+let activeMood = '';
+let softPauseShown = false;
 
 const GLOW_MAP = { deep_flow: 1.6, flow: 1.3, neutral: 1.0, breaking: 0.7, lost: 0.4 };
 
@@ -552,7 +574,7 @@ function drawOrb() {
   const breatheSpeed = 0.008 * yyState.tempo;
   const breathe = Math.sin(t * breatheSpeed) * 0.3 + 0.7;
   const cloudState = ichimoku.getState();
-  const dynGlow = GLOW_MAP[cloudState] || 1.0;
+  const dynGlow = GLOW_MAP[cloudState.state] || 1.0;
   const g = X.createRadialGradient(cx, cy, 0, cx, cy, r * 2.5);
   const rgb = hexToRgb(s.orb);
   g.addColorStop(0, 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (0.9 * breathe) + ')');
@@ -626,13 +648,40 @@ function handleTouch() {
   if (navigator.vibrate) navigator.vibrate(8);
 }
 
+function getBreatheSeconds(balance) {
+  if (balance > 0.3) return 2;
+  if (balance < -0.3) return 5;
+  return 3;
+}
+
+function triggerSoftPause() {
+  if (softPauseShown) return;
+  softPauseShown = true;
+  sessionActive = false;
+  sessEnd.classList.add('show');
+}
+
+function applyOrbLoopBindings() {
+  const cloud = ichimoku.getState();
+  document.documentElement.style.setProperty('--orb-glow', cloud.intensity.toFixed(3));
+  const yy = yinyang.getState();
+  document.documentElement.style.setProperty('--breathe-speed', getBreatheSeconds(yy.balance) + 's');
+  const phase = arc.getState().phase;
+  if (phase !== activeMood) {
+    ORB_MOODS.forEach(p => document.body.classList.remove('mood-' + p));
+    document.body.classList.add('mood-' + phase);
+    activeMood = phase;
+  }
+  if (guard.remaining() <= 0) triggerSoftPause();
+}
+
 function updateHUD() {
   if (!sessionActive) return;
   const rem = guard.remaining();
   const m = Math.floor(rem), s = Math.floor((rem - m) * 60);
   hTimer.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
   hArc.textContent = arc.getLabel();
-  const cs = ichimoku.getState(); hCloud.textContent = cs; hCloud.className = 'hud-pill ' + cs;
+  const cs = ichimoku.getState(); hCloud.textContent = cs.state; hCloud.className = 'hud-pill ' + cs.state;
   const yy = yinyang.getState(); hYY.textContent = yy.energy;
   hFib.textContent = 'F' + (drillCount + 1);
   cFill.style.width = Math.min(100, ichimoku.getThickness() * 2) + '%';
@@ -641,12 +690,12 @@ function updateHUD() {
   document.getElementById('s-streak').textContent = sessionState.streak;
   document.getElementById('s-xp').textContent = sessionState.xp;
   document.getElementById('s-fib').textContent = 'F' + (drillCount + 1);
-  document.getElementById('s-flow').textContent = cs;
+  document.getElementById('s-flow').textContent = cs.state;
   document.getElementById('s-yin').textContent = yinyang.getYinPercent() + '%';
   document.getElementById('s-yang').textContent = yinyang.getYangPercent() + '%';
 }
 
-guard.onBreak(() => { sessionActive = false; sessEnd.classList.add('show') });
+guard.onBreak(() => { triggerSoftPause() });
 guard.onNudge(() => { hTimer.style.color = '#ff6b6b' });
 
 C.addEventListener('pointerdown', () => {
@@ -710,6 +759,7 @@ document.addEventListener('keydown', e => {
 function frame() {
   t++; X.clearRect(0, 0, W, H);
   drawBg(); spawnParticles(); drawParticles(); drawOrb();
+  applyOrbLoopBindings();
   if (sessionActive) { handleDrillProgress(); if (t % 30 === 0) updateHUD() }
   requestAnimationFrame(frame);
 }
